@@ -65,7 +65,12 @@ public class SimulationCanvas extends Canvas {
 
     private void drawLight(GraphicsContext gc, double x, double y, TrafficLight light) {
         double radius = 12.0;
-        gc.setFill(light.isGreen() ? Color.LIMEGREEN : Color.RED);
+        Color fill = switch (light.getState()) {
+            case GREEN -> Color.LIMEGREEN;
+            case YELLOW -> Color.GOLD;
+            case RED -> Color.DARKRED;
+        };
+        gc.setFill(fill);
         gc.fillOval(x, y, radius, radius);
     }
 

@@ -1,14 +1,11 @@
 package traffic.sim.algorithms;
 
+import traffic.sim.controller.TrafficController;
 import traffic.sim.model.Car;
 import traffic.sim.model.Direction;
-import traffic.sim.model.Intersection;
-import traffic.sim.model.TrafficLight;
 
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class MaxPressureController implements SignalAlgorithm {
     private static final double MIN_HOLD = 3.0;
@@ -16,20 +13,31 @@ public class MaxPressureController implements SignalAlgorithm {
     private static final int SWITCH_THRESHOLD = 2;
 
     private double timer;
-    private boolean eastWestGreen;
+    private TrafficController.DirectionGroup lastGroup;
 
     public MaxPressureController() {
-        reset();
     }
 
     @Override
-    public void update(double deltaSeconds, Intersection intersection, Map<Direction, List<Car>> approachQueues) {
+    public void update(double deltaSeconds, TrafficController controller, Map<Direction, List<Car>> approachQueues) {
         timer += deltaSeconds;
+
+        TrafficController.DirectionGroup active = controller.getActiveGroup();
+
+        if (lastGroup == null || active != lastGroup) {
+            lastGroup = active;
+            timer = 0.0;
+        }
+
+        if (controller.isTransitioning() || controller.getTargetGroup() != controller.getActiveGroup()) {
+            return;
+        }
+
         int ewPressure = pressureForPair(approachQueues, Direction.EAST, Direction.WEST);
         int nsPressure = pressureForPair(approachQueues, Direction.NORTH, Direction.SOUTH);
 
         boolean shouldSwitch = false;
-        if (eastWestGreen) {
+        if (active == TrafficController.DirectionGroup.EAST_WEST) {
             if ((nsPressure - ewPressure) >= SWITCH_THRESHOLD && timer >= MIN_HOLD) {
                 shouldSwitch = true;
             } else if (timer >= MAX_HOLD) {
@@ -44,23 +52,13 @@ public class MaxPressureController implements SignalAlgorithm {
         }
 
         if (shouldSwitch) {
+            controller.requestSwitch(active.opposite());
             timer = 0.0;
-            eastWestGreen = !eastWestGreen;
-            applyState(intersection);
         }
     }
 
     private int pressureForPair(Map<Direction, List<Car>> queues, Direction dirA, Direction dirB) {
         return queues.getOrDefault(dirA, List.of()).size() + queues.getOrDefault(dirB, List.of()).size();
-    }
-
-    private void applyState(Intersection intersection) {
-        Set<Direction> ew = EnumSet.of(Direction.EAST, Direction.WEST);
-        Set<Direction> ns = EnumSet.of(Direction.NORTH, Direction.SOUTH);
-        TrafficLight.LightState ewState = eastWestGreen ? TrafficLight.LightState.GREEN : TrafficLight.LightState.RED;
-        TrafficLight.LightState nsState = eastWestGreen ? TrafficLight.LightState.RED : TrafficLight.LightState.GREEN;
-        ew.forEach(dir -> intersection.getLight(dir).setState(ewState));
-        ns.forEach(dir -> intersection.getLight(dir).setState(nsState));
     }
 
     @Override
@@ -69,8 +67,8 @@ public class MaxPressureController implements SignalAlgorithm {
     }
 
     @Override
-    public void reset() {
+    public void reset(TrafficController controller) {
         timer = 0.0;
-        eastWestGreen = true;
+        lastGroup = controller.getActiveGroup();
     }
 }

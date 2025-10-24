@@ -22,6 +22,7 @@ Alternativ, deschide proiectul în IntelliJ IDEA / Eclipse cu suport Maven și r
 3. `Reset` golește intersecția și repornește algoritmul curent.
 4. Timpul de așteptare pentru fiecare mașină este afișat numeric deasupra acesteia.
 5. Media timpilor de așteptare este afișată în colțul din stânga-jos.
+6. Graficul din panoul din dreapta arată evoluția timpului mediu de așteptare, actualizat o dată pe secundă.
 
 ## Extensii
 

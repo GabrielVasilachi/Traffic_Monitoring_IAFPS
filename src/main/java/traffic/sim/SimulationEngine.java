@@ -2,15 +2,15 @@ package traffic.sim;
 
 import javafx.scene.paint.Color;
 import traffic.sim.algorithms.SignalAlgorithm;
+import traffic.sim.controller.TrafficController;
 import traffic.sim.model.Car;
 import traffic.sim.model.Direction;
 import traffic.sim.model.Intersection;
 import traffic.sim.model.TrafficLight;
+import traffic.sim.stats.PerformanceTracker;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.EnumSet;
-import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -20,8 +20,12 @@ public class SimulationEngine {
     private static final double CAR_LENGTH = 26.0;
     private static final double MIN_GAP = 6.0;
     private static final double CAR_WIDTH = 16.0;
-    private static final double SPAWN_MIN = 2.0;
-    private static final double SPAWN_MAX = 5.0;
+    private static final double SPAWN_INTERVAL_MIN = 1.0;
+    private static final double SPAWN_INTERVAL_MAX = 5.0;
+    private static final int WAVE_SIZE_MIN = 1;
+    private static final int WAVE_SIZE_MAX = 3;
+    private static final double WAVE_GAP_MIN = 50.0;
+    private static final double WAVE_GAP_MAX = 200.0;
     private static final double INTERSECTION_HALF_SIZE = 45.0;
     private static final double LANE_OFFSET = 28.0;
     private static final double SPAWN_OFFSET = 140.0;
@@ -31,8 +35,8 @@ public class SimulationEngine {
 
     private final Random random = new Random();
     private final Intersection intersection = new Intersection();
+    private final TrafficController controller = new TrafficController(intersection);
     private final Map<Direction, List<Car>> laneCars = new EnumMap<>(Direction.class);
-    private final Map<Direction, Double> spawnTimers = new EnumMap<>(Direction.class);
     private final Map<Direction, Double> laneCoordinate = new EnumMap<>(Direction.class);
 
     private final Color[] palette = new Color[]{
@@ -41,9 +45,9 @@ public class SimulationEngine {
     };
 
     private SignalAlgorithm algorithm;
-    private double totalWaitTime;
-    private int completedCars;
+    private double spawnTimer;
     private double simulationClock;
+    private final PerformanceTracker performanceTracker = new PerformanceTracker();
 
     public SimulationEngine(double width, double height) {
         this.width = width;
@@ -55,17 +59,18 @@ public class SimulationEngine {
 
     public void reset() {
         laneCars.values().forEach(List::clear);
-        spawnTimers.replaceAll((d, v) -> randomInterval());
-        totalWaitTime = 0.0;
-        completedCars = 0;
+        spawnTimer = randomInterval();
         simulationClock = 0.0;
-        intersection.resetToDefaultPhase();
+        performanceTracker.reset();
+        controller.reset(TrafficController.DirectionGroup.EAST_WEST);
+        if (algorithm != null) {
+            algorithm.reset(controller);
+        }
     }
 
     private void initLaneStorage() {
         for (Direction direction : Direction.values()) {
             laneCars.put(direction, new ArrayList<>());
-            spawnTimers.put(direction, randomInterval());
         }
         laneCoordinate.put(Direction.EAST, height / 2.0 - LANE_OFFSET);
         laneCoordinate.put(Direction.WEST, height / 2.0 + LANE_OFFSET);
@@ -74,15 +79,17 @@ public class SimulationEngine {
     }
 
     private double randomInterval() {
-        return SPAWN_MIN + random.nextDouble() * (SPAWN_MAX - SPAWN_MIN);
+        return SPAWN_INTERVAL_MIN + random.nextDouble() * (SPAWN_INTERVAL_MAX - SPAWN_INTERVAL_MIN);
     }
 
     public void setAlgorithm(SignalAlgorithm algorithm) {
         this.algorithm = algorithm;
+        controller.reset(TrafficController.DirectionGroup.EAST_WEST);
+        performanceTracker.reset();
+        simulationClock = 0.0;
         if (this.algorithm != null) {
-            this.algorithm.reset();
+            this.algorithm.reset(controller);
         }
-        intersection.resetToDefaultPhase();
     }
 
     public void update(double deltaSeconds) {
@@ -91,26 +98,48 @@ public class SimulationEngine {
         }
 
         simulationClock += deltaSeconds;
+        controller.update(deltaSeconds);
         intersection.updateLights(deltaSeconds);
-        algorithm.update(deltaSeconds, intersection, laneCars);
+        algorithm.update(deltaSeconds, controller, laneCars);
 
         handleSpawning(deltaSeconds);
         updateCars(deltaSeconds);
+        performanceTracker.update(deltaSeconds, simulationClock);
     }
 
     private void handleSpawning(double deltaSeconds) {
-        for (Direction direction : Direction.values()) {
-            double remaining = spawnTimers.get(direction) - deltaSeconds;
-            if (remaining <= 0.0) {
-                spawnCar(direction);
-                spawnTimers.put(direction, randomInterval());
-            } else {
-                spawnTimers.put(direction, remaining);
+        spawnTimer -= deltaSeconds;
+        if (spawnTimer > 0.0) {
+            return;
+        }
+
+        Direction direction = Direction.values()[random.nextInt(Direction.values().length)];
+        int waveSize = random.nextInt(WAVE_SIZE_MAX - WAVE_SIZE_MIN + 1) + WAVE_SIZE_MIN;
+        spawnWave(direction, waveSize);
+        spawnTimer = randomInterval();
+    }
+
+    private void spawnWave(Direction direction, int count) {
+        List<Car> cars = laneCars.get(direction);
+
+        double[] basePosition = baseSpawnPosition(direction, cars);
+        double baseX = basePosition[0];
+        double baseY = basePosition[1];
+
+        double offset = 0.0;
+        for (int i = 0; i < count; i++) {
+            if (i > 0) {
+                offset += randomWaveSpacing();
             }
+            double x = baseX - direction.dx() * offset;
+            double y = baseY - direction.dy() * offset;
+            Color color = palette[random.nextInt(palette.length)];
+            Car car = new Car(direction, x, y, CAR_SPEED, CAR_LENGTH, color);
+            cars.add(car);
         }
     }
 
-    private void spawnCar(Direction direction) {
+    private double[] baseSpawnPosition(Direction direction, List<Car> existing) {
         double x;
         double y;
         switch (direction) {
@@ -130,11 +159,26 @@ public class SimulationEngine {
                 x = laneCoordinate.get(Direction.SOUTH);
                 y = -SPAWN_OFFSET;
             }
-            default -> throw new IllegalStateException("Unexpected value: " + direction);
+            default -> throw new IllegalStateException("Unexpected direction: " + direction);
         }
-        Color color = palette[random.nextInt(palette.length)];
-        Car car = new Car(direction, x, y, CAR_SPEED, CAR_LENGTH, color);
-        laneCars.get(direction).add(car);
+
+        if (!existing.isEmpty()) {
+            Car tail = existing.stream()
+                    .min((a, b) -> Double.compare(projectAlong(a), projectAlong(b)))
+                    .orElse(null);
+            if (tail != null) {
+                double spacing = randomWaveSpacing();
+                x = tail.getX() - direction.dx() * spacing;
+                y = tail.getY() - direction.dy() * spacing;
+            }
+        }
+
+        return new double[]{x, y};
+    }
+
+    private double randomWaveSpacing() {
+        double gap = WAVE_GAP_MIN + random.nextDouble() * (WAVE_GAP_MAX - WAVE_GAP_MIN);
+        return gap + CAR_LENGTH;
     }
 
     private void updateCars(double deltaSeconds) {
@@ -144,9 +188,11 @@ public class SimulationEngine {
             Car previous = null;
             for (Car car : cars) {
                 boolean atSignal = !hasClearedStopLine(car);
-                boolean lightGreen = intersection.getLight(direction).isGreen();
+                TrafficLight.LightState lightState = controller.getState(direction);
                 boolean frontHasSpace = previous == null || gapToPrevious(car, previous) > (CAR_LENGTH + MIN_GAP);
-                boolean allowedToMove = !atSignal || (lightGreen && frontHasSpace);
+                boolean lightAllowsMovement = lightState == TrafficLight.LightState.GREEN
+                        || (lightState == TrafficLight.LightState.YELLOW && !atSignal);
+                boolean allowedToMove = frontHasSpace && (!atSignal || lightAllowsMovement);
                 car.update(deltaSeconds, allowedToMove);
                 previous = car;
             }
@@ -197,8 +243,7 @@ public class SimulationEngine {
                     case SOUTH -> car.getY() > height + SPAWN_OFFSET;
                 };
                 if (finished) {
-                    totalWaitTime += car.getCumulativeWait();
-                    completedCars++;
+                    performanceTracker.recordCarFinished(car.getCumulativeWait());
                 }
                 return finished;
             });
@@ -220,14 +265,11 @@ public class SimulationEngine {
     }
 
     public double getAverageWait() {
-        if (completedCars == 0) {
-            return 0.0;
-        }
-        return totalWaitTime / completedCars;
+        return performanceTracker.getAverageWait();
     }
 
     public int getCompletedCars() {
-        return completedCars;
+        return performanceTracker.getCompletedCars();
     }
 
     public double getSimulationClock() {
@@ -250,13 +292,11 @@ public class SimulationEngine {
         return CAR_WIDTH;
     }
 
-    public Set<Direction> getActiveGreens() {
-        EnumSet<Direction> greens = EnumSet.noneOf(Direction.class);
-        for (Direction direction : Direction.values()) {
-            if (intersection.getLight(direction).isGreen()) {
-                greens.add(direction);
-            }
-        }
-        return greens;
+    public TrafficController getController() {
+        return controller;
+    }
+
+    public PerformanceTracker getPerformanceTracker() {
+        return performanceTracker;
     }
 }

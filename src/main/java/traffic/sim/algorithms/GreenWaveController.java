@@ -1,9 +1,8 @@
 package traffic.sim.algorithms;
 
+import traffic.sim.controller.TrafficController;
 import traffic.sim.model.Car;
 import traffic.sim.model.Direction;
-import traffic.sim.model.Intersection;
-import traffic.sim.model.TrafficLight;
 
 import java.util.EnumSet;
 import java.util.List;
@@ -13,29 +12,42 @@ import java.util.Set;
 public class GreenWaveController implements SignalAlgorithm {
     private static final double BASE_GREEN_DURATION = 8.0;
     private static final double EXTENSION = 4.0;
-    private static final double MIN_DURATION = 4.0;
+    private static final double MIN_DURATION = 5.0;
 
     private double timer;
-    private boolean eastWestGreen;
+    private TrafficController.DirectionGroup lastGroup;
 
     public GreenWaveController() {
-        reset();
     }
 
     @Override
-    public void update(double deltaSeconds, Intersection intersection, Map<Direction, List<Car>> approachQueues) {
+    public void update(double deltaSeconds, TrafficController controller, Map<Direction, List<Car>> approachQueues) {
         timer += deltaSeconds;
-        double activeDuration = eastWestGreen ? durationForPair(approachQueues, Direction.EAST, Direction.WEST)
-                                              : durationForPair(approachQueues, Direction.NORTH, Direction.SOUTH);
-        if (timer >= activeDuration) {
+
+        TrafficController.DirectionGroup active = controller.getActiveGroup();
+
+        if (lastGroup == null || active != lastGroup) {
+            lastGroup = active;
             timer = 0.0;
-            eastWestGreen = !eastWestGreen;
-            applyState(intersection);
+        }
+
+        if (controller.isTransitioning() || controller.getTargetGroup() != controller.getActiveGroup()) {
+            return;
+        }
+
+        double activeDuration = durationForGroup(approachQueues, active);
+
+        if (timer >= activeDuration) {
+            controller.requestSwitch(active.opposite());
+            timer = 0.0;
         }
     }
 
-    private double durationForPair(Map<Direction, List<Car>> queues, Direction dirA, Direction dirB) {
-        int queued = queueSize(queues, dirA) + queueSize(queues, dirB);
+    private double durationForGroup(Map<Direction, List<Car>> queues, TrafficController.DirectionGroup group) {
+        Set<Direction> dirs = group == TrafficController.DirectionGroup.EAST_WEST
+                ? EnumSet.of(Direction.EAST, Direction.WEST)
+                : EnumSet.of(Direction.NORTH, Direction.SOUTH);
+        int queued = dirs.stream().mapToInt(dir -> queueSize(queues, dir)).sum();
         if (queued >= 3) {
             return BASE_GREEN_DURATION + EXTENSION;
         }
@@ -49,23 +61,14 @@ public class GreenWaveController implements SignalAlgorithm {
         return queues.getOrDefault(direction, List.of()).size();
     }
 
-    private void applyState(Intersection intersection) {
-        Set<Direction> ew = EnumSet.of(Direction.EAST, Direction.WEST);
-        Set<Direction> ns = EnumSet.of(Direction.NORTH, Direction.SOUTH);
-        TrafficLight.LightState ewState = eastWestGreen ? TrafficLight.LightState.GREEN : TrafficLight.LightState.RED;
-        TrafficLight.LightState nsState = eastWestGreen ? TrafficLight.LightState.RED : TrafficLight.LightState.GREEN;
-        ew.forEach(dir -> intersection.getLight(dir).setState(ewState));
-        ns.forEach(dir -> intersection.getLight(dir).setState(nsState));
-    }
-
     @Override
     public String name() {
         return "Green Wave";
     }
 
     @Override
-    public void reset() {
+    public void reset(TrafficController controller) {
         timer = 0.0;
-        eastWestGreen = true;
+        lastGroup = controller.getActiveGroup();
     }
 }

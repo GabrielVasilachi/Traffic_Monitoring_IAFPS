@@ -1,9 +1,8 @@
 package traffic.sim.algorithms;
 
-import traffic.sim.model.Direction;
-import traffic.sim.model.Intersection;
-import traffic.sim.model.TrafficLight;
+import traffic.sim.controller.TrafficController;
 import traffic.sim.model.Car;
+import traffic.sim.model.Direction;
 
 import java.util.List;
 import java.util.Map;
@@ -11,11 +10,10 @@ import java.util.Map;
 public class FixedTimeController implements SignalAlgorithm {
     private final double phaseDuration;
     private double timer;
-    private boolean eastWestGreen;
+    private TrafficController.DirectionGroup lastGroup;
 
     public FixedTimeController(double phaseDurationSeconds) {
         this.phaseDuration = phaseDurationSeconds;
-        reset();
     }
 
     public FixedTimeController() {
@@ -23,20 +21,30 @@ public class FixedTimeController implements SignalAlgorithm {
     }
 
     @Override
-    public void update(double deltaSeconds, Intersection intersection, Map<Direction, List<Car>> approachQueues) {
+    public void update(double deltaSeconds, TrafficController controller, Map<Direction, List<Car>> approachQueues) {
         timer += deltaSeconds;
-        if (timer >= phaseDuration) {
-            timer = 0.0;
-            eastWestGreen = !eastWestGreen;
-            applyState(intersection);
-        }
-    }
 
-    private void applyState(Intersection intersection) {
-        TrafficLight.LightState ewState = eastWestGreen ? TrafficLight.LightState.GREEN : TrafficLight.LightState.RED;
-        TrafficLight.LightState nsState = eastWestGreen ? TrafficLight.LightState.RED : TrafficLight.LightState.GREEN;
-        intersection.setPairState(Direction.EAST, Direction.WEST, ewState);
-        intersection.setPairState(Direction.NORTH, Direction.SOUTH, nsState);
+        if (lastGroup == null) {
+            lastGroup = controller.getActiveGroup();
+        }
+
+        if (controller.getActiveGroup() != lastGroup) {
+            lastGroup = controller.getActiveGroup();
+            timer = 0.0;
+        }
+
+        if (controller.isTransitioning()) {
+            return;
+        }
+
+        if (controller.getTargetGroup() != controller.getActiveGroup()) {
+            return;
+        }
+
+        if (timer >= phaseDuration) {
+            controller.requestSwitch(controller.getActiveGroup().opposite());
+            timer = 0.0;
+        }
     }
 
     @Override
@@ -45,8 +53,8 @@ public class FixedTimeController implements SignalAlgorithm {
     }
 
     @Override
-    public void reset() {
+    public void reset(TrafficController controller) {
         timer = 0.0;
-        eastWestGreen = true;
+        lastGroup = controller.getActiveGroup();
     }
 }

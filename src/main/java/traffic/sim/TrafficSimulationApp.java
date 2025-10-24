@@ -5,6 +5,9 @@ import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.chart.LineChart;
+import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.XYChart;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.RadioButton;
@@ -30,6 +33,8 @@ public class TrafficSimulationApp extends Application {
     private long lastTimestamp = -1L;
     private boolean running = false;
     private Supplier<SignalAlgorithm> algorithmFactory;
+    private LineChart<Number, Number> waitChart;
+    private XYChart.Series<Number, Number> waitSeries;
 
     @Override
     public void start(Stage primaryStage) {
@@ -94,28 +99,64 @@ public class TrafficSimulationApp extends Application {
         resetBtn.setOnAction(evt -> {
             running = false;
             timer.stop();
-            engine.reset();
             if (algorithmFactory == null) {
-                selectAlgorithm(FixedTimeController::new);
+                applyAlgorithm(FixedTimeController::new);
             } else {
-                engine.setAlgorithm(algorithmFactory.get());
+                applyAlgorithm(algorithmFactory);
             }
-            canvas.render();
         });
 
         Label info = new Label("Timer peste mașină = timpul de așteptare curent");
         info.setWrapText(true);
 
-        box.getChildren().addAll(title, fixed, greenWave, maxPressure, startStop, resetBtn, info);
+        NumberAxis xAxis = new NumberAxis();
+        xAxis.setLabel("Timp (s)");
+        xAxis.setForceZeroInRange(true);
+        NumberAxis yAxis = new NumberAxis();
+        yAxis.setLabel("Timp mediu așteptare (s)");
+        waitChart = new LineChart<>(xAxis, yAxis);
+        waitChart.setAnimated(false);
+        waitChart.setLegendVisible(false);
+        waitChart.setCreateSymbols(false);
+        waitChart.setPrefHeight(220);
+        waitSeries = new XYChart.Series<>();
+        waitChart.getData().add(waitSeries);
+
+        box.getChildren().addAll(title, fixed, greenWave, maxPressure, startStop, resetBtn, info, waitChart);
         selectAlgorithm(FixedTimeController::new);
         return box;
     }
 
     private void selectAlgorithm(Supplier<SignalAlgorithm> factory) {
+        applyAlgorithm(factory);
+    }
+
+    private void applyAlgorithm(Supplier<SignalAlgorithm> factory) {
         this.algorithmFactory = factory;
-        engine.reset();
         engine.setAlgorithm(factory.get());
+        engine.reset();
+        resetChart();
         canvas.render();
+    }
+
+    private void resetChart() {
+        if (waitSeries != null) {
+            waitSeries.getData().clear();
+        }
+    }
+
+    private void updateChartSeries() {
+        if (waitSeries == null) {
+            return;
+        }
+        engine.getPerformanceTracker().drainSamples().forEach(sample ->
+                waitSeries.getData().add(new XYChart.Data<>(sample.timeSeconds(), sample.averageWaitSeconds())));
+
+        // Keep the chart legible by limiting the number of points shown.
+        int maxPoints = 240;
+        if (waitSeries.getData().size() > maxPoints) {
+            waitSeries.getData().remove(0, waitSeries.getData().size() - maxPoints);
+        }
     }
 
     private void setupAnimationTimer() {
@@ -130,6 +171,7 @@ public class TrafficSimulationApp extends Application {
                 lastTimestamp = now;
                 engine.update(deltaSeconds);
                 canvas.render();
+                updateChartSeries();
             }
         };
     }

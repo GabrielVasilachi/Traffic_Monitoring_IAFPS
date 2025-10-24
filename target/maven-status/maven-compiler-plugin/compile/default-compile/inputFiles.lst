@@ -4,8 +4,10 @@
 /Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/algorithms/GreenWaveController.java
 /Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/algorithms/MaxPressureController.java
 /Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/algorithms/SignalAlgorithm.java
+/Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/controller/TrafficController.java
 /Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/model/Car.java
 /Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/model/Direction.java
 /Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/model/Intersection.java
 /Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/model/TrafficLight.java
+/Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/stats/PerformanceTracker.java
 /Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/ui/SimulationCanvas.java

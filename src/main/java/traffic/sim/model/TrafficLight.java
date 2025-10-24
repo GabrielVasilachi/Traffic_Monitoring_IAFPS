@@ -3,6 +3,7 @@ package traffic.sim.model;
 public class TrafficLight {
     public enum LightState {
         RED,
+        YELLOW,
         GREEN
     }
 
@@ -41,5 +42,13 @@ public class TrafficLight {
 
     public boolean isGreen() {
         return state == LightState.GREEN;
+    }
+
+    public boolean isYellow() {
+        return state == LightState.YELLOW;
+    }
+
+    public boolean isRed() {
+        return state == LightState.RED;
     }
 }
