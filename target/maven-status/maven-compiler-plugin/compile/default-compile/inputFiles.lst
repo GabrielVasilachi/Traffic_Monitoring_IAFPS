@@ -10,4 +10,5 @@
 /Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/model/Intersection.java
 /Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/model/TrafficLight.java
 /Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/stats/PerformanceTracker.java
+/Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/stats/TrafficStatsManager.java
 /Users/gabrielvasilachi/Documents/Universitate/IAFPS_Proiect/src/main/java/traffic/sim/ui/SimulationCanvas.java

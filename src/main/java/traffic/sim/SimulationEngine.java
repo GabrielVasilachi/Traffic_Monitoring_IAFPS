@@ -7,7 +7,7 @@ import traffic.sim.model.Car;
 import traffic.sim.model.Direction;
 import traffic.sim.model.Intersection;
 import traffic.sim.model.TrafficLight;
-import traffic.sim.stats.PerformanceTracker;
+import traffic.sim.stats.TrafficStatsManager;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -47,7 +47,7 @@ public class SimulationEngine {
     private SignalAlgorithm algorithm;
     private double spawnTimer;
     private double simulationClock;
-    private final PerformanceTracker performanceTracker = new PerformanceTracker();
+    private final TrafficStatsManager statsManager = new TrafficStatsManager();
 
     public SimulationEngine(double width, double height) {
         this.width = width;
@@ -61,7 +61,7 @@ public class SimulationEngine {
         laneCars.values().forEach(List::clear);
         spawnTimer = randomInterval();
         simulationClock = 0.0;
-        performanceTracker.reset();
+        statsManager.reset();
         controller.reset(TrafficController.DirectionGroup.EAST_WEST);
         if (algorithm != null) {
             algorithm.reset(controller);
@@ -85,7 +85,7 @@ public class SimulationEngine {
     public void setAlgorithm(SignalAlgorithm algorithm) {
         this.algorithm = algorithm;
         controller.reset(TrafficController.DirectionGroup.EAST_WEST);
-        performanceTracker.reset();
+        statsManager.reset();
         simulationClock = 0.0;
         if (this.algorithm != null) {
             this.algorithm.reset(controller);
@@ -104,7 +104,7 @@ public class SimulationEngine {
 
         handleSpawning(deltaSeconds);
         updateCars(deltaSeconds);
-        performanceTracker.update(deltaSeconds, simulationClock);
+        statsManager.update(deltaSeconds, simulationClock, laneCars.values());
     }
 
     private void handleSpawning(double deltaSeconds) {
@@ -242,9 +242,6 @@ public class SimulationEngine {
                     case NORTH -> car.getY() < -SPAWN_OFFSET;
                     case SOUTH -> car.getY() > height + SPAWN_OFFSET;
                 };
-                if (finished) {
-                    performanceTracker.recordCarFinished(car.getCumulativeWait());
-                }
                 return finished;
             });
         }
@@ -264,12 +261,8 @@ public class SimulationEngine {
         return intersection;
     }
 
-    public double getAverageWait() {
-        return performanceTracker.getAverageWait();
-    }
-
-    public int getCompletedCars() {
-        return performanceTracker.getCompletedCars();
+    public double getTotalWait() {
+        return statsManager.getLatestTotalWait();
     }
 
     public double getSimulationClock() {
@@ -296,7 +289,7 @@ public class SimulationEngine {
         return controller;
     }
 
-    public PerformanceTracker getPerformanceTracker() {
-        return performanceTracker;
+    public TrafficStatsManager getStatsManager() {
+        return statsManager;
     }
 }

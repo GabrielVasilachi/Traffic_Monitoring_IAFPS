@@ -2,6 +2,7 @@ package traffic.sim;
 
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -19,6 +20,7 @@ import traffic.sim.algorithms.FixedTimeController;
 import traffic.sim.algorithms.GreenWaveController;
 import traffic.sim.algorithms.MaxPressureController;
 import traffic.sim.algorithms.SignalAlgorithm;
+import traffic.sim.stats.TrafficStatsManager;
 import traffic.sim.ui.SimulationCanvas;
 
 import java.util.function.Supplier;
@@ -113,7 +115,7 @@ public class TrafficSimulationApp extends Application {
         xAxis.setLabel("Timp (s)");
         xAxis.setForceZeroInRange(true);
         NumberAxis yAxis = new NumberAxis();
-        yAxis.setLabel("Timp mediu așteptare (s)");
+        yAxis.setLabel("Sumă totală timp așteptare (s)");
         waitChart = new LineChart<>(xAxis, yAxis);
         waitChart.setAnimated(false);
         waitChart.setLegendVisible(false);
@@ -149,14 +151,19 @@ public class TrafficSimulationApp extends Application {
         if (waitSeries == null) {
             return;
         }
-        engine.getPerformanceTracker().drainSamples().forEach(sample ->
-                waitSeries.getData().add(new XYChart.Data<>(sample.timeSeconds(), sample.averageWaitSeconds())));
-
-        // Keep the chart legible by limiting the number of points shown.
-        int maxPoints = 240;
-        if (waitSeries.getData().size() > maxPoints) {
-            waitSeries.getData().remove(0, waitSeries.getData().size() - maxPoints);
+        var samples = engine.getStatsManager().drainSamples();
+        if (samples.isEmpty()) {
+            return;
         }
+        Platform.runLater(() -> {
+            for (TrafficStatsManager.StatsSample sample : samples) {
+                waitSeries.getData().add(new XYChart.Data<>(sample.timeSeconds(), sample.totalWaitSeconds()));
+            }
+            int maxPoints = 240;
+            if (waitSeries.getData().size() > maxPoints) {
+                waitSeries.getData().remove(0, waitSeries.getData().size() - maxPoints);
+            }
+        });
     }
 
     private void setupAnimationTimer() {

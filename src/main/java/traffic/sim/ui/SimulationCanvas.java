@@ -104,7 +104,7 @@ public class SimulationCanvas extends Canvas {
 
     private void drawStatistics(GraphicsContext gc) {
         gc.setFill(Color.WHITE);
-        String text = "Average wait: " + String.format("%.1f s", engine.getAverageWait());
+        String text = "Total wait: " + String.format("%.1f s", engine.getTotalWait());
         gc.fillText(text, 20, getHeight() - 20);
     }
 }

@@ -1,0 +1,4 @@
+- [x] Analyze existing wait-time tracking and chart update flow.
+- [x] Implement `traffic.sim.stats.TrafficStatsManager` to aggregate per-second total wait metrics.
+- [x] Refactor engine, canvas, and UI to use real-time total wait stats and asynchronous chart updates.
+- [x] Verify Maven build (`mvn -DskipTests package`) after changes.
